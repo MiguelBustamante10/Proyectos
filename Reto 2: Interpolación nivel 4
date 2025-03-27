@@ -1,0 +1,199 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Función base radial multicuádrica
+def multiquadric_rbf(r, c):
+    return np.sqrt(r**2 + c**2)
+
+# Datos del Excel
+x_nodes = np.array([ 0.4,  0.7,  1.0 ,  1.3,  1.6,  1.9,  2.2,  2.5,  2.8,  3.1,  3.4,
+         3.7,  4. ,  4.3,  4.6,  4.9,  5.2,  5.5,  5.8,  6.1,  6.4,  6.7,
+         7. ,  7.3,  7.6,  7.9,  8.2,  8.5,  8.8,  9.1,  9.4,  9.7, 10. ,
+        10.3, 10.6, 10.9, 11.2])
+y_nodes = np.array([ 1.71692969,  1.32043788,  0.15249493, -0.36795328,  0.05817506,
+         0.35606178, -0.36668488, -1.50294539, -1.61044437, -0.24869358,
+         1.35327517,  1.68696016,  0.70145493, -0.26250297, -0.21167571,
+         0.31548449,  0.10096876, -1.00884152, -1.75803851, -1.0271391 ,
+         0.68195042,  1.73572699,  1.26151314,  0.09576969, -0.36357036,
+         0.09112888,  0.3445112 , -0.43231481, -1.54802795, -1.56815305,
+        -0.1484853 ,  1.41467564,  1.65805841,  0.63229188, -0.28877264,
+        -0.1830661 ,  0.33202105])
+
+x_valid = np.array([0.953, 1.421, 1.889, 2.357, 2.825, 3.293, 3.761, 4.229, 4.697,
+        5.165, 5.633, 6.101, 6.569, 7.037, 7.505, 7.973, 8.441, 8.909,
+        9.377])
+y_valid = np.array([ 0.32303811, -0.26883886,  0.36162107, -1.00322074, -1.54573483,
+         0.86748765,  1.56164133, -0.11186111, -0.03074395,  0.18485936,
+        -1.47852334, -1.0222924 ,  1.45099263,  1.12400373, -0.34209063,
+         0.22249763, -0.2094922 , -1.73933972, -0.28536118])
+
+# Parámetro c
+c = 1
+
+# Construcción de la matriz A para interpolación
+N = len(x_nodes)
+A = np.zeros((N+3, N+3))
+
+# Llenamos la parte superior izquierda de la matriz con las funciones de base radial
+for i in range(N):
+    for j in range(N):
+        A[i, j] = multiquadric_rbf(abs(x_nodes[i] - x_nodes[j]), c)
+    A[i, N] = 1           # Término beta_1
+    A[i, N+1] = x_nodes[i]  # Término beta_2 * x
+    A[i, N+2] = x_nodes[i]**2  # Término beta_3 * x^2
+
+# Transponer las últimas tres columnas y colocarlas como filas adicionales
+A[N:, :N] = np.transpose(A[:N, N:])
+
+# Resolver el sistema para encontrar los coeficientes
+coeffs = np.linalg.lstsq(A, np.concatenate([y_nodes, [0, 0, 0]]), rcond=None)[0]
+
+# Puntos de evaluación
+x_eval = np.linspace(min(x_nodes), max(x_nodes), 200)
+y_interp = np.zeros_like(x_eval)
+
+# Aplicar interpolación con los términos polinómicos
+for i in range(len(x_eval)):
+    for j in range(N):
+        y_interp[i] += coeffs[j] * multiquadric_rbf(abs(x_eval[i] - x_nodes[j]), c)
+    y_interp[i] += coeffs[N] + coeffs[N+1] * x_eval[i] + coeffs[N+2] * x_eval[i]**2
+
+# Evaluar en los puntos de validación
+y_valid_interp = np.zeros_like(x_valid)
+for i in range(len(x_valid)):
+    for j in range(N):
+        y_valid_interp[i] += coeffs[j] * multiquadric_rbf(abs(x_valid[i] - x_nodes[j]), c)
+    y_valid_interp[i] += coeffs[N] + coeffs[N+1] * x_valid[i] + coeffs[N+2] * x_valid[i]**2
+
+# Calcular error verdadero porcentual
+error_porcentual = np.abs((y_valid - y_valid_interp) / y_valid) * 100
+
+# Calcular error RMS
+error_rms = np.sqrt(np.mean((y_valid- y_valid_interp) ** 2))
+
+# Aproximar el área.
+area_encerrada=np.trapz(y_interp, x_eval)
+
+# Graficar resultados
+plt.figure(figsize=(10, 6))
+plt.scatter(x_nodes, y_nodes, color='red', label="Nodos (Interpolación)")
+plt.scatter(x_valid, y_valid, color='purple', label="Puntos de Validación")
+plt.plot(x_eval, y_interp, color='green', linestyle='dashed', label="Interpolación RBF")
+plt.plot(x_valid, y_valid, color='purple', linestyle='solid', label="Función Real")
+plt.xlabel("x")
+plt.ylabel("f(x)")
+plt.title("Interpolación con Funciones de Base Radial (RBF) Multicuádrica y Términos Polinómicos")
+plt.legend()
+plt.grid()
+plt.show()
+
+# Mostrar resultados
+print("Errores verdaderos porcentuales:", error_porcentual)
+print("Error RMS:", error_rms)
+print("Área encerrada entre la interpolación y el eje x:", area_encerrada)
+
+# Figura 1
+# Valores del parámetro de forma c
+c_values = [1, 10, 20, 30]
+plt.figure(figsize=(10, 6))
+for c in c_values:
+    N_fig1 = len(x_nodes)
+    A_fig1 = np.zeros((N_fig1+3, N_fig1+3))
+
+    # Construcción de la matriz A para figura 1
+    for i in range(N_fig1):
+        for j in range(N_fig1):
+            A_fig1[i, j] = multiquadric_rbf(abs(x_nodes[i] - x_nodes[j]), c)
+        A_fig1[i, N_fig1] = 1
+        A_fig1[i, N_fig1+1] = x_nodes[i]
+        A_fig1[i, N_fig1+2] = x_nodes[i]**2
+
+    A_fig1[N_fig1:, :N_fig1] = np.transpose(A_fig1[:N_fig1, N_fig1:])
+    coeffs_fig1 = np.linalg.lstsq(A_fig1, np.concatenate([y_nodes, [0, 0, 0]]), rcond=None)[0]
+
+    # Evaluar la interpolación
+    y_interp_fig1 = np.zeros_like(x_eval)
+    for i in range(len(x_eval)):
+        for j in range(N_fig1):
+            y_interp_fig1[i] += coeffs_fig1[j] * multiquadric_rbf(abs(x_eval[i] - x_nodes[j]), c)
+        y_interp_fig1[i] += coeffs_fig1[N_fig1] + coeffs_fig1[N_fig1+1] * x_eval[i] + coeffs_fig1[N_fig1+2] * x_eval[i]**2
+
+    plt.plot(x_eval, y_interp_fig1, label=f'Interpolación c={c}')
+plt.scatter(x_nodes, y_nodes, color='red', label="Nodos (Interpolación)", marker='o')
+plt.scatter(x_valid, y_valid, color='purple', label="Puntos de Validación", marker='x')
+plt.xlabel("x")
+plt.ylabel("f(x)")
+plt.title("Figura 1: Solución numérica para diferentes valores de c")
+plt.legend()
+plt.grid()
+plt.show()
+
+# Figura 2
+plt.figure(figsize=(10, 6))
+for c in c_values:
+    N_fig2 = len(x_nodes)
+    A_fig2 = np.zeros((N_fig2+3, N_fig2+3))
+
+    # Construcción de la matriz A para figura 2
+    for i in range(N_fig2):
+        for j in range(N_fig2):
+            A_fig2[i, j] = multiquadric_rbf(abs(x_nodes[i] - x_nodes[j]), c)
+        A_fig2[i, N_fig2] = 1
+        A_fig2[i, N_fig2+1] = x_nodes[i]
+        A_fig2[i, N_fig2+2] = x_nodes[i]**2
+
+    A_fig2[N_fig2:, :N_fig2] = np.transpose(A_fig2[:N_fig2, N_fig2:])
+    coeffs_fig2 = np.linalg.lstsq(A_fig2, np.concatenate([y_nodes, [0, 0, 0]]), rcond=None)[0]
+
+    # Evaluar la interpolación en puntos de validación
+    y_valid_interp_fig2 = np.zeros_like(x_valid)
+    for i in range(len(x_valid)):
+        for j in range(N_fig2):
+            y_valid_interp_fig2[i] += coeffs_fig2[j] * multiquadric_rbf(abs(x_valid[i] - x_nodes[j]), c)
+        y_valid_interp_fig2[i] += coeffs_fig2[N_fig2] + coeffs_fig2[N_fig2+1] * x_valid[i] + coeffs_fig2[N_fig2+2] * x_valid[i]**2
+
+    error_local_fig2 = np.abs(y_valid - y_valid_interp_fig2)
+    plt.plot(x_valid, error_local_fig2, marker='o', linestyle='-', label=f'c = {c}')
+plt.xlabel("x")
+plt.ylabel("Error local")
+plt.title("Figura 2: Error local de la interpolación para distintos valores de c")
+plt.legend()
+plt.grid()
+plt.show()
+
+# Figura 3
+error_rms_fig3_list = []
+for c in c_values:
+    N_fig3 = len(x_nodes)
+    A_fig3 = np.zeros((N_fig3+3, N_fig3+3))
+
+    # Construcción de la matriz A para figura 3
+    for i in range(N_fig3):
+        for j in range(N_fig3):
+            A_fig3[i, j] = multiquadric_rbf(abs(x_nodes[i] - x_nodes[j]), c)
+        A_fig3[i, N_fig3] = 1
+        A_fig3[i, N_fig3+1] = x_nodes[i]
+        A_fig3[i, N_fig3+2] = x_nodes[i]**2
+
+    A_fig3[N_fig3:, :N_fig3] = np.transpose(A_fig3[:N_fig3, N_fig3:])
+    coeffs_fig3 = np.linalg.lstsq(A_fig3, np.concatenate([y_nodes, [0, 0, 0]]), rcond=None)[0]
+
+    # Evaluar interpolación en puntos de validación
+    y_valid_interp_fig3 = np.zeros_like(x_valid)
+    for i in range(len(x_valid)):
+        for j in range(N_fig3):
+            y_valid_interp_fig3[i] += coeffs_fig3[j] * multiquadric_rbf(abs(x_valid[i] - x_nodes[j]), c)
+        y_valid_interp_fig3[i] += coeffs_fig3[N_fig3] + coeffs_fig3[N_fig3+1] * x_valid[i] + coeffs_fig3[N_fig3+2] * x_valid[i]**2
+
+    # Calcular error RMS
+    error_rms_fig3 = np.sqrt(np.mean((y_valid - y_valid_interp_fig3) ** 2))
+    error_rms_fig3_list.append(error_rms_fig3)
+
+plt.figure(figsize=(8, 5))
+plt.plot(c_values, error_rms_fig3_list, marker='o', linestyle='-', color='b', label="Error RMS")
+plt.xlabel("Parámetro de forma c")
+plt.ylabel("Error RMS")
+plt.title("Figura 3: Error RMS en función del parámetro de forma c")
+plt.legend()
+plt.grid()
+plt.show()
